@@ -1,9 +1,9 @@
 {
     "exe": "adaptor.py", 
     "protocol": "zwave", 
-    "name": "Zwave Boiler Control", 
+    "name": "Hostmann Controls 1 3", 
     "device_resource": "/api/bridge/v1/device/51/", 
-    "url": "https://github.com/ContinuumBridge/zwave_boiler_control/archive/v0.0.1.tar.gz", 
+    "url": "https://github.com/ContinuumBridge/zwave-boiler-control/archive/v0.0.1.tar.gz", 
     "version": "0.0.1", 
     "provider": "ContinuumBridge", 
     "adaptor_resource": "/api/bridge/v1/adaptor/14/", 

@@ -3,8 +3,8 @@
 # Copyright (C) ContinuumBridge Limited, 2014 - All Rights Reserved
 # Written by Peter Claydon
 #
-ModuleName = "boiler-control"
-INTERVAL     = 60      # How often to request sensor values
+ModuleName   = "boiler-control"
+INTERVAL     = 60        # How often to check connection
 
 import sys
 import time
@@ -14,6 +14,18 @@ from cbcommslib import CbAdaptor
 from cbconfig import *
 from twisted.internet import threads
 from twisted.internet import reactor
+
+def state2int(s):
+    if s == "on":
+        return 1
+    else:
+        return 0
+
+def int2state(i):
+    if i == 1:
+        return "on"
+    else:
+        return "off" 
 
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
@@ -55,24 +67,20 @@ class Adaptor(CbAdaptor):
 
     def pollSensors(self):
         cmd = {"id": self.id,
-               "request": "post",
-               "address": self.addr,
-               "instance": "0",
-               "commandClass": "50",
-               "action": "Get",
-               "value": ""
+               "request": "check",
+               "address": self.addr
               }
         self.sendZwaveMessage(cmd)
         reactor.callLater(INTERVAL, self.pollSensors)
 
-    def checkConnected(self):
-        if self.updateTime == self.lastUpdateTime:
-            self.connected = False
+    def checkConnected(self, isFailed):
+        logging.debug("%s %s checkConnected, isFailed: %s", ModuleName, self.id, isFailed)
+        if isFailed:
+            if self.connected:
+                self.sendCharacteristic("connected", False, time.time())
         else:
-            self.connected = True
-        self.sendCharacteristic("connected", self.connected, time.time())
-        self.lastUpdateTime = self.updateTime
-        reactor.callLater(INTERVAL + 10, self.checkConnected)
+            if not self.connected:
+                self.sendCharacteristic("connected", True, time.time())
 
     def onZwaveMessage(self, message):
         #logging.debug("%s %s onZwaveMessage, message: %s", ModuleName, self.id, str(message))
@@ -84,50 +92,40 @@ class Adaptor(CbAdaptor):
                    "request": "get",
                    "address": self.addr,
                    "instance": "0",
-                   "commandClass": "37",
-                   "value": "level"
+                   "commandClass": "64",
+                   "value": "mode"
+                  }
+            self.sendZwaveMessage(cmd)
+            cmd = {"id": self.id,
+                   "request": "getc",
+                   "address": self.addr,
+                   "instance": "0",
+                   "commandClass": "0"
                   }
             self.sendZwaveMessage(cmd)
             reactor.callLater(30, self.pollSensors)
-            reactor.callLater(INTERVAL, self.checkConnected)
         elif message["content"] == "data":
             try:
-                if message["commandClass"] == "50":
-                    if message["data"]["name"] == "0":
-                        energy = message["data"]["val"]["value"] 
-                        logging.debug("%s %s onZwaveMessage, energy (KWh): %s", ModuleName, self.id, str(energy))
-                        self.sendCharacteristic("energy", energy, time.time())
-                    elif message["data"]["name"] == "6":
-                        power_factor = message["data"]["val"]["value"] 
-                        logging.debug("%s %s onZwaveMessage, power_factor: %s", ModuleName, self.id, str(power_factor))
-                        self.sendCharacteristic("power_factor", power_factor, time.time())
-                elif message["commandClass"] == "37":
-                    if message["data"]["name"] == "level":
-                        if message["data"]["value"]:
-                            b = "on"
-                        else:
-                            b = "off"
-                        self.switchState = b
-                        logging.debug("%s %s onZwaveMessage, switch state: %s", ModuleName, self.id, b)
-                        self.sendCharacteristic("binary_sensor", b, time.time())
-                self.updateTime = message["data"]["updateTime"]
+                if message["commandClass"] == "64":
+                    if message["data"]["name"] == "mode":
+                        mode = message["data"]["value"] 
+                        logging.debug("%s %s onZwaveMessage, mode: %s", ModuleName, self.id, mode)
+                        self.sendCharacteristic("binary_sensor", int2state(mode), time.time())
+                elif message["commandClass"] == "0":
+                    if message["data"]["name"] == "isFailed":
+                        isFailed = message["data"]["value"] 
+                        self.checkConnected(isFailed)
             except:
-                logging.warning("%s %s onZwaveMessage, unexpected message", ModuleName, str(message))
-
-    def onOff(self, s):
-        if s == "on":
-            return "255"
-        else:
-            return "0"
+                logging.warning("%s onZwaveMessage, unexpected message: %s", ModuleName, str(message))
 
     def switch(self, onOrOff):
         cmd = {"id": self.id,
                "request": "post",
                "address": self.addr,
                "instance": "0",
-               "commandClass": "0x25",
+               "commandClass": "64",
                "action": "Set",
-               "value": self.onOff(onOrOff)
+               "value": str(state2int(onOrOff))
               }
         self.sendZwaveMessage(cmd)
 
