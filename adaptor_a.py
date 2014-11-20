@@ -4,7 +4,7 @@
 # Written by Peter Claydon
 #
 ModuleName   = "boiler-control"
-INTERVAL     = 60        # How often to check connection
+INTERVAL     = 15        # How often to check connection
 
 import sys
 import time
@@ -35,6 +35,7 @@ class Adaptor(CbAdaptor):
         self.connected =        False
         self.switchState =      "unknown"
         self.apps =             {"binary_sensor": [],
+                                 "switch": [],
                                  "connected": []}
         # super's __init__ must be called:
         #super(Adaptor, self).__init__(argv)
@@ -69,6 +70,15 @@ class Adaptor(CbAdaptor):
         cmd = {"id": self.id,
                "request": "check",
                "address": self.addr
+              }
+        self.sendZwaveMessage(cmd)
+        cmd = {"id": self.id,
+               "request": "post",
+               "address": self.addr,
+               "instance": "0",
+               "commandClass": "64",
+               "action": "Get",
+               "value": ""
               }
         self.sendZwaveMessage(cmd)
         reactor.callLater(INTERVAL, self.pollSensors)
