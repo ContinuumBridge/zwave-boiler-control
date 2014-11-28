@@ -119,7 +119,7 @@ class Adaptor(CbAdaptor):
                 if message["commandClass"] == "64":
                     if message["data"]["name"] == "mode":
                         mode = message["data"]["value"] 
-                        logging.debug("%s %s onZwaveMessage, mode: %s", ModuleName, self.id, mode)
+                        #logging.debug("%s %s onZwaveMessage, mode: %s", ModuleName, self.id, mode)
                         self.sendCharacteristic("binary_sensor", int2state(mode), time.time())
                 elif message["commandClass"] == "0":
                     if message["data"]["name"] == "isFailed":
