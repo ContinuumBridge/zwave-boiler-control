@@ -84,7 +84,7 @@ class Adaptor(CbAdaptor):
         reactor.callLater(INTERVAL, self.pollSensors)
 
     def checkConnected(self, isFailed):
-        logging.debug("%s %s checkConnected, isFailed: %s", ModuleName, self.id, isFailed)
+        #logging.debug("%s %s checkConnected, isFailed: %s", ModuleName, self.id, isFailed)
         if isFailed:
             if self.connected:
                 self.sendCharacteristic("connected", False, time.time())
