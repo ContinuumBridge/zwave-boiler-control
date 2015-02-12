@@ -9,7 +9,6 @@ INTERVAL     = 15        # How often to check connection
 import sys
 import time
 import os
-import logging
 from cbcommslib import CbAdaptor
 from cbconfig import *
 from twisted.internet import threads
@@ -29,7 +28,6 @@ def int2state(i):
 
 class Adaptor(CbAdaptor):
     def __init__(self, argv):
-        logging.basicConfig(filename=CB_LOGFILE,level=CB_LOGGING_LEVEL,format='%(asctime)s %(message)s')
         self.status =           "ok"
         self.state =            "stopped"
         self.connected =        False
@@ -47,7 +45,6 @@ class Adaptor(CbAdaptor):
             self.state == "error"
         elif action == "clear_error":
             self.state = "running"
-        logging.debug("%s %s state = %s", ModuleName, self.id, self.state)
         msg = {"id": self.id,
                "status": "state",
                "state": self.state}
@@ -84,7 +81,7 @@ class Adaptor(CbAdaptor):
         reactor.callLater(INTERVAL, self.pollSensors)
 
     def checkConnected(self, isFailed):
-        #logging.debug("%s %s checkConnected, isFailed: %s", ModuleName, self.id, isFailed)
+        #self.cbLog("debug", "checkConnected, isFailed: " + strisFailed))
         if isFailed:
             if self.connected:
                 self.sendCharacteristic("connected", False, time.time())
@@ -93,7 +90,7 @@ class Adaptor(CbAdaptor):
                 self.sendCharacteristic("connected", True, time.time())
 
     def onZwaveMessage(self, message):
-        #logging.debug("%s %s onZwaveMessage, message: %s", ModuleName, self.id, str(message))
+        #self.cbLog("debug", "onZwaveMessage, message: " + str(message))
         if message["content"] == "init":
             self.updateTime = 0
             self.lastUpdateTime = time.time()
@@ -117,16 +114,15 @@ class Adaptor(CbAdaptor):
         elif message["content"] == "data":
             try:
                 if message["commandClass"] == "64":
-                    if message["data"]["name"] == "mode":
+                    if message["value"] == "mode":
                         mode = message["data"]["value"] 
-                        #logging.debug("%s %s onZwaveMessage, mode: %s", ModuleName, self.id, mode)
                         self.sendCharacteristic("binary_sensor", int2state(mode), time.time())
                 elif message["commandClass"] == "0":
                     if message["data"]["name"] == "isFailed":
                         isFailed = message["data"]["value"] 
                         self.checkConnected(isFailed)
             except:
-                logging.warning("%s onZwaveMessage, unexpected message: %s", ModuleName, str(message))
+                self.cbLog("warning", "onZwaveMessage, unexpected message: " + str(message))
 
     def switch(self, onOrOff):
         cmd = {"id": self.id,
@@ -140,7 +136,6 @@ class Adaptor(CbAdaptor):
         self.sendZwaveMessage(cmd)
 
     def onAppInit(self, message):
-        #logging.debug("%s %s %s onAppInit, req = %s", ModuleName, self.id, self.friendly_name, message)
         resp = {"name": self.name,
                 "id": self.id,
                 "status": "ok",
@@ -152,7 +147,6 @@ class Adaptor(CbAdaptor):
         self.setState("running")
 
     def onAppRequest(self, message):
-        #logging.debug("%s %s %s onAppRequest, message = %s", ModuleName, self.id, self.friendly_name, message)
         # Switch off anything that already exists for this app
         for a in self.apps:
             if message["id"] in self.apps[a]:
@@ -161,14 +155,13 @@ class Adaptor(CbAdaptor):
         for f in message["service"]:
             if message["id"] not in self.apps[f["characteristic"]]:
                 self.apps[f["characteristic"]].append(message["id"])
-        logging.debug("%s %s %s apps: %s", ModuleName, self.id, self.friendly_name, str(self.apps))
+        self.cbLog("debug", "apps: " + str(self.apps))
 
     def onAppCommand(self, message):
-        logging.debug("%s %s %s onAppCommand, req = %s", ModuleName, self.id, self.friendly_name, message)
         if "data" not in message:
-            logging.warning("%s %s %s app message without data: %s", ModuleName, self.id, self.friendly_name, message)
+            self.cbLog("warning", "app message without data: " + str(message))
         elif message["data"] != "on" and message["data"] != "off":
-            logging.warning("%s %s %s app switch state must be on or off: %s", ModuleName, self.id, self.friendly_name, message)
+            self.cbLog("warning", "appp switch state must be on or off: " + str(message))
         else:
             if message["data"] != self.switchState:
                 self.switch(message["data"])
@@ -178,7 +171,6 @@ class Adaptor(CbAdaptor):
             May be called again if there is a new configuration, which
             could be because a new app has been added.
         """
-        logging.debug("%s onConfigureMessage, config: %s", ModuleName, config)
         self.setState("starting")
 
 if __name__ == '__main__':
