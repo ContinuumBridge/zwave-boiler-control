@@ -3,8 +3,8 @@
 # Copyright (C) ContinuumBridge Limited, 2014 - All Rights Reserved
 # Written by Peter Claydon
 #
-ModuleName   = "boiler-control"
-INTERVAL     = 15        # How often to check connection
+INTERVAL                = 15     # How often to check connection
+TIME_CUTOFF             = 60     # Data older than this is considered "stale"
 
 import sys
 import time
@@ -31,6 +31,9 @@ class Adaptor(CbAdaptor):
         self.status =           "ok"
         self.state =            "stopped"
         self.connected =        False
+        self.lastValueTime =    0
+        self.lastUpdateTime =   0
+        self.isFailed =         False
         self.switchState =      "unknown"
         self.apps =             {"binary_sensor": [],
                                  "switch": [],
@@ -80,14 +83,17 @@ class Adaptor(CbAdaptor):
         self.sendZwaveMessage(cmd)
         reactor.callLater(INTERVAL, self.pollSensors)
 
-    def checkConnected(self, isFailed):
-        #self.cbLog("debug", "checkConnected, isFailed: " + strisFailed))
-        if isFailed:
-            if self.connected:
-                self.sendCharacteristic("connected", False, time.time())
+    def checkConnected(self):
+        if self.isFailed:
+            self.sendCharacteristic("connected", False, time.time())
         else:
-            if not self.connected:
-                self.sendCharacteristic("connected", True, time.time())
+            if self.updateTime == self.lastUpdateTime:
+                self.connected = False
+            else:
+                self.connected = True
+            self.sendCharacteristic("connected", self.connected, time.time())
+            self.lastUpdateTime = self.updateTime
+        reactor.callLater(INTERVAL*2, self.checkConnected)
 
     def onZwaveMessage(self, message):
         #self.cbLog("debug", "onZwaveMessage, message: " + str(message))
@@ -111,16 +117,21 @@ class Adaptor(CbAdaptor):
                   }
             self.sendZwaveMessage(cmd)
             reactor.callLater(30, self.pollSensors)
+            reactor.callLater(120, self.checkConnected)
         elif message["content"] == "data":
             try:
                 if message["commandClass"] == "64":
                     if message["value"] == "mode":
-                        mode = message["data"]["value"] 
-                        self.sendCharacteristic("binary_sensor", int2state(mode), time.time())
+                        valueTime = message["data"]["updateTime"] 
+                        if valueTime != self.lastValueTime and time.time() - valueTime < TIME_CUTOFF:
+                            mode = message["data"]["value"] 
+                            self.sendCharacteristic("binary_sensor", int2state(mode), time.time())
+                            self.lastValueTime = valueTime
+                        self.updateTime = valueTime
                 elif message["commandClass"] == "0":
-                    if message["data"]["name"] == "isFailed":
-                        isFailed = message["data"]["value"] 
-                        self.checkConnected(isFailed)
+                    if "name" in message["data"]:
+                        if message["data"]["name"] == "isFailed":
+                            self.isFailed = message["data"]["value"] 
             except:
                 self.cbLog("warning", "onZwaveMessage, unexpected message: " + str(message))
 
